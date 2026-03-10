@@ -561,9 +561,6 @@ static void watch_send_next(void)
     if (s_dbg_live) send_to_dbg(&s_dbg, cmd);
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  FONT MANAGEMENT
- * ═══════════════════════════════════════════════════════════════ */
 static void font_build(i32 sz)
 {
     if (sz < 8)  sz = 8;
@@ -693,9 +690,6 @@ static void unscissor(void)
     glDisable(GL_SCISSOR_TEST);
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  SPLITTER HANDLING
- * ═══════════════════════════════════════════════════════════════ */
 static i32 check_splitter_hit(i32 x, i32 y, i32 splitter_x, i32 splitter_y, i32 is_vertical)
 {
     if (is_vertical) {
@@ -1104,9 +1098,6 @@ static void draw_source(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
     draw_scrollbar(px + pw, cy, ch, s_src_n, mv, s_src_sc);
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  TEXT PANELS (Locals, Stack)
- * ═══════════════════════════════════════════════════════════════ */
 #define SIDE_CAP (32 * 1024)
 static char s_locals[SIDE_CAP] = "(waiting - run and stop the program)\n";
 static char s_stack[SIDE_CAP] = "(waiting - run and stop the program)\n";
@@ -1180,9 +1171,6 @@ static void draw_textpanel(const char *title, const char *text,
     draw_scrollbar(px + pw, cy, ch, n, mv, *sc);
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  REGISTERS PANEL
- * ═══════════════════════════════════════════════════════════════ */
 static void update_registers_from_output(const char *output)
 {
     const char *p = output;
@@ -1266,9 +1254,6 @@ static void draw_registers_panel(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
     }
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  CLI ARGUMENTS PANEL - Fixed text positioning
- * ═══════════════════════════════════════════════════════════════ */
 static void draw_cli_args_panel(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
                                 i32 mx, i32 my, i32 clicked)
 {
@@ -1342,9 +1327,6 @@ static void draw_cli_args_panel(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
     }
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  THREADS PANEL
- * ═══════════════════════════════════════════════════════════════ */
 static void update_threads_from_output(const char *output)
 {
     const char *p = output;
@@ -1431,12 +1413,8 @@ static void draw_threads_panel(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
     }
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  BREAKPOINTS PANEL - Fixed to show breakpoints
- * ═══════════════════════════════════════════════════════════════ */
 static void update_breakpoints_from_output(const char *output)
 {
-    /* Save locally-set breakpoints so they survive the re-parse */
     BreakpointInfo saved[128];
     i32 saved_count = s_bp_count;
     if (saved_count > 0)
@@ -1446,12 +1424,10 @@ static void update_breakpoints_from_output(const char *output)
     s_bp_count = 0;
 
     while (*p && s_bp_count < 128) {
-        /* Look for breakpoint patterns like "1: name = 'main', locations = 1" */
         if (isdigit(*p) && p[1] == ':') {
             s_breakpoints[s_bp_count].bp_id = (u32)(*p - '0');
             p += 2;
 
-            /* Skip to file/line info */
             char *at = strstr(p, "at ");
             if (at) {
                 at += 3;
@@ -1537,9 +1513,6 @@ static void draw_breakpoints_panel(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
     }
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  WATCH PANEL with tree view - Fixed text positioning and expandable tree
- * ═══════════════════════════════════════════════════════════════ */
 static void draw_watch(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
                       i32 mx, i32 my, i32 clicked, i32 double_clicked,
                       i32 *add_btn_x, i32 *add_btn_y, i32 *add_btn_w, i32 *add_btn_h,
@@ -1649,7 +1622,6 @@ static void draw_watch(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
     i32 lh = s_fh + 6;
     i32 indent = s_fw * 2;
 
-    /* Calculate total lines for scrolling */
     i32 total_lines = 0;
     for (i32 i = 0; i < s_wn; i++) {
         total_lines++;
@@ -1680,7 +1652,6 @@ static void draw_watch(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
                 rect((f32)px + 1, ry, (f32)pw - 2, (f32)lh, COLOR_BG_ACTIVE_R, COLOR_BG_ACTIVE_G, COLOR_BG_ACTIVE_B, 60);
             }
 
-            /* Compact remove button — just "x", right-aligned, small */
             i32 rx = px + pw - s_fw * 3 - 6;
             rm_x[i] = rx;
             rm_y[i] = (i32)ry;
@@ -1698,7 +1669,6 @@ static void draw_watch(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
                     hot_rm ? 0x60 : 0x44,
                     hot_rm ? 0x60 : 0x44);
 
-            /* Expand/collapse button for complex types */
             i32 expand_x = px + 8;
             if (s_watches[i].is_complex) {
                 if (s_watches[i].is_expanded) {
@@ -1708,9 +1678,7 @@ static void draw_watch(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
                 }
             }
 
-            /* Display the watch value — or an inline edit box */
             if (s_editing_watch_index == i) {
-                /* ── Inline text editor ─────────────────────────── */
                 i32 box_x  = px + 24;
                 i32 box_w  = rx - box_x - 4;
                 i32 box_y  = (i32)ry + (lh - s_fh - 8) / 2;
@@ -1782,7 +1750,6 @@ static void draw_watch(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
                     snprintf(disp, sizeof(disp), "%s = %s", s_watches[i].expr, s_watches[i].value);
                 }
 
-            /* Truncate if too long, but try to keep pointer visible */
             i32 maxw = (rx - px - 32) / s_fw;
             if (maxw < (i32)strlen(disp)) {
                 if (maxw > 8) {
@@ -1807,13 +1774,11 @@ static void draw_watch(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
             text_at(disp, (f32)(px + 24), ry + (lh - s_fh) / 2, 0xCC, 0xDD, 0xAA);
             } /* end normal display else */
 
-            /* Click on expand button */
             if (clicked && mx >= expand_x && mx < expand_x + s_fw * 2 &&
                 my >= (i32)ry && my < (i32)ry + lh) {
                 s_watches[i].is_expanded = !s_watches[i].is_expanded;
             }
 
-            /* Double-click to edit */
             if (double_clicked && mx >= px + 24 && mx < rx &&
                 my >= (i32)ry && my < (i32)ry + lh) {
                 s_editing_watch_index = i;
@@ -1850,7 +1815,6 @@ static void draw_watch(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
             }
         } else if (s_watches[i].is_complex && s_watches[i].is_expanded &&
                    s_watches[i].root && s_watches[i].root->child_count == 0) {
-            /* No parsed children — show raw value */
             if (line >= s_wsc && line < s_wsc + mv) {
                 f32 child_ry = (f32)(cy + (line - s_wsc) * lh);
                 char cbuf[256];
@@ -1870,9 +1834,6 @@ static void draw_watch(i32 px, i32 py, i32 pw, i32 ph, i32 wh,
     draw_scrollbar(px + pw, cy, ch, total_lines, mv, s_wsc);
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  CONTEXT MENU
- * ═══════════════════════════════════════════════════════════════ */
 static i32 s_menu_open = 0;
 static i32 s_menu_x = 0, s_menu_y = 0, s_menu_line = 0;
 
@@ -1927,9 +1888,6 @@ static i32 draw_menu(i32 mx, i32 my, i32 clicked)
     return hit;
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  LLDB OUTPUT CLASSIFIER
- * ═══════════════════════════════════════════════════════════════ */
 typedef enum {ROUTE_NONE, ROUTE_LOCALS, ROUTE_STACK, ROUTE_WATCH, ROUTE_LOOKUP} RouteMode;
 static RouteMode s_route = ROUTE_NONE;
 static char s_racc[SIDE_CAP];
@@ -2037,7 +1995,6 @@ static void classify(const char *chunk)
             if (!strncmp(cmd, "frame variable", 14) || !strncmp(cmd, "fr v", 4)) {
                 s_route = ROUTE_LOCALS;
                 s_rlen = 0;
-                /* Fire watch refresh once locals are done loading */
                 if (s_refresh_pending > 0) {
                     s_refresh_pending--;
                     if (s_refresh_pending == 0) watch_queue_all();
@@ -2115,6 +2072,7 @@ static void classify(const char *chunk)
 
     if (!in_lookup) parse_location(chunk);
 }
+
 static void parse_location(const char *chunk)
 {
     const char *p = chunk;
@@ -2265,9 +2223,6 @@ static i32 is_double_click(i32 x, i32 y, i32 time)
     return double_click;
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  CLIPBOARD HELPERS
- * ═══════════════════════════════════════════════════════════════ */
 static TextEditor *get_active_editor(void)
 {
     if (s_active_input == INPUT_CMD)   return &s_cmd_editor;
@@ -2450,9 +2405,6 @@ static i32 toolbar_btn(f32 *bx, f32 by, const char *lbl, i32 mx, i32 my, i32 cli
     return r;
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  MAIN
- * ═══════════════════════════════════════════════════════════════ */
 int main(i32 argc, char **argv)
 {
     RGFW_window *win = RGFW_createWindow("ldb2 - LLDB GUI Frontend",
