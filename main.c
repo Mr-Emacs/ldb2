@@ -2115,81 +2115,136 @@ static void classify(const char *chunk)
 
     if (!in_lookup) parse_location(chunk);
 }
-
 static void parse_location(const char *chunk)
 {
-    static const char *exts[] = {".c:", ".h:", ".cpp:", ".cc:", ".cxx:", NULL};
-    const char *line = chunk;
+    const char *p = chunk;
+    while (*p) {
+        const char *nl  = strchr(p, '\n');
+        size_t      ll  = nl ? (size_t)(nl - p) : strlen(p);
+        char        lb[1024];
+        if (ll >= sizeof(lb)) ll = sizeof(lb) - 1;
+        memcpy(lb, p, ll);
+        lb[ll] = '\0';
+        if (ll > 0 && lb[ll - 1] == '\r') lb[--ll] = '\0';
 
-    while (*line) {
-        const char *nl = strchr(line, '\n');
-        size_t ll3 = nl ? (size_t)(nl - line) : strlen(line);
-        char lb[1024];
-        if (ll3 >= sizeof(lb)) ll3 = sizeof(lb) - 1;
-        memcpy(lb, line, ll3);
-        lb[ll3] = '\0';
+        const char *fp = strstr(lb, "frame #");
+        const char *at = fp ? strstr(fp, " at ") : NULL;
+        if (fp && at) {
+            at += 4; /* skip " at " */
 
-        for (i32 e = 0; exts[e]; e++) {
-            char *ep = strstr(lb, exts[e]);
-            if (!ep) continue;
+            char loc[MAX_PATH];
+            strncpy(loc, at, sizeof(loc) - 1);
+            loc[sizeof(loc) - 1] = '\0';
+            i32 loclen = (i32)strlen(loc);
+            while (loclen > 0 &&
+                   (loc[loclen-1] == ' '  || loc[loclen-1] == '\r' ||
+                    loc[loclen-1] == '\n' || loc[loclen-1] == '\t'))
+                loc[--loclen] = '\0';
 
-            i32 elen = (i32)strlen(exts[e]);
-            char *dp = ep + elen;
-            i32 lno = 0;
-            while (*dp >= '0' && *dp <= '9') {
-                lno = lno * 10 + (*dp - '0');
-                dp++;
+            {
+                char *lc = strrchr(loc, ':');
+                if (lc && lc > loc + 2) {
+                    char *d = lc + 1;
+                    i32 all_dig = (*d != '\0');
+                    while (*d) { if (!isdigit((unsigned char)*d)) { all_dig = 0; break; } d++; }
+                    if (all_dig) {
+                        char saved = *lc;
+                        *lc = '\0';
+                        char *pc = strrchr(loc, ':');
+                        *lc = saved;
+                        if (pc && pc > loc + 2) {
+                            char *d2 = pc + 1;
+                            i32 pd = (*d2 != '\0');
+                            while (*d2 && d2 < lc) {
+                                if (!isdigit((unsigned char)*d2)) { pd = 0; break; }
+                                d2++;
+                            }
+                            if (pd) {
+                                /* Confirmed PATH:LINE:COL — drop :COL */
+                                *lc = '\0';
+                            }
+                        }
+                    }
+                }
             }
-            if (lno <= 0) continue;
 
-            char *ns = ep;
-            while (ns > lb && ns[-1] != ' ' && ns[-1] != '`' && ns[-1] != '"')
-                ns--;
+            char *lc = strrchr(loc, ':');
+            if (!lc || lc <= loc + 1) goto next_line;
 
-            size_t flen = (size_t)(ep - ns) + (size_t)(elen - 1);
-            if (!flen || flen >= MAX_PATH) continue;
-
-            char nf[MAX_PATH];
-            memcpy(nf, ns, flen);
-            nf[flen] = '\0';
+            i32 lno = atoi(lc + 1);
+            if (lno <= 0) goto next_line;
+            *lc = '\0'; /* loc is now the bare file path */
 
             s_cur_line = lno;
-            s_src_sc = lno - 10;
+            s_src_sc   = lno - 10;
             if (s_src_sc < 0) s_src_sc = 0;
 
-            i32 is_abs = ((i32)flen > 1 && nf[1] == ':') ||
-                         (nf[0] == '\\') || (nf[0] == '/');
+            i32 loclen2 = (i32)strlen(loc);
+            i32 is_abs  = (loc[0] == '/') || (loc[0] == '\\') ||
+                          (loclen2 > 2 && loc[1] == ':'); /* C:\ */
 
             if (is_abs) {
-                if (strcmp(nf, s_src_path) != 0) src_load(nf);
+                if (strcmp(loc, s_src_path) != 0)
+                    src_load(loc);
             } else {
-                if (strchr(nf, '\\') || strchr(nf, '/')) return;
+                const char *sl = strrchr(s_src_path, '\\');
+                if (!sl) sl = strrchr(s_src_path, '/');
+                const char *loaded_base = sl ? sl + 1 : s_src_path;
 
-                const char *loaded_base = s_src_path;
-                const char *sl2 = strrchr(s_src_path, '\\');
-                if (!sl2) sl2 = strrchr(s_src_path, '/');
-                if (sl2) loaded_base = sl2 + 1;
+                const char *rb = strrchr(loc, '\\');
+                if (!rb) rb = strrchr(loc, '/');
+                const char *loc_base = rb ? rb + 1 : loc;
 
-                if (strcmp(nf, loaded_base) == 0) return;
+                if (strcmp(loc_base, loaded_base) == 0)
+                    return;
 
-                if (s_dbg_live && strcmp(nf, s_lookup_pending) != 0) {
-                    strncpy(s_lookup_pending, nf, sizeof(s_lookup_pending) - 1);
+                if (s_dbg_live && strcmp(loc, s_lookup_pending) != 0) {
+                    strncpy(s_lookup_pending, loc,
+                            sizeof(s_lookup_pending) - 1);
                     char cmd2[MAX_PATH + 60];
-                    snprintf(cmd2, sizeof(cmd2), "source info --file %s\n", nf);
+                    snprintf(cmd2, sizeof(cmd2),
+                             "source info --file %s\n", loc_base);
                     send_to_dbg(&s_dbg, cmd2);
                 }
             }
             return;
         }
 
+        next_line:
         if (!nl) break;
-        line = nl + 1;
+        p = nl + 1;
+    }
+
+    p = chunk;
+    while (*p) {
+        const char *nl = strchr(p, '\n');
+        size_t      ll = nl ? (size_t)(nl - p) : strlen(p);
+        char        lb[256];
+        if (ll >= sizeof(lb)) ll = sizeof(lb) - 1;
+        memcpy(lb, p, ll);
+        lb[ll] = '\0';
+
+        const char *q = lb;
+        while (*q == ' ') q++;
+        if (q[0] == '-' && q[1] == '>') {
+            q += 2;
+            while (*q == ' ') q++;
+            if (isdigit((unsigned char)*q)) {
+                i32 lno = atoi(q);
+                if (lno > 0) {
+                    s_cur_line = lno;
+                    s_src_sc   = lno - 10;
+                    if (s_src_sc < 0) s_src_sc = 0;
+                    return;
+                }
+            }
+        }
+
+        if (!nl) break;
+        p = nl + 1;
     }
 }
 
-/* ═══════════════════════════════════════════════════════════════
- *  APP STATE
- * ═══════════════════════════════════════════════════════════════ */
 static i32 s_mx = 0, s_my = 0;
 static i32 s_need_refresh = 0;
 static i32 s_thunk_recover = 0;
